@@ -1,0 +1,1 @@
+pytest -v -s "D:\Peettam\MySiteBook" --browser chrome --html=Reports/html_Reports/mysitebook_chrome.html

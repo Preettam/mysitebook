@@ -1,0 +1,1 @@
+pytest -v -s "D:\Peettam\MySiteBook" --browser firefox --html=Reports/html_Reports/mysitebook_firefox.html

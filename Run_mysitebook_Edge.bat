@@ -1,0 +1,1 @@
+pytest -v -s "D:\Peettam\MySiteBook" --browser edge --html=Reports/html_Reports/mysitebook_edge.html
