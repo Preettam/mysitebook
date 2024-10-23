@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return (key_a < key_b ? 1 : -1);
+        } else {
+            return (key_a > key_b ? 1 : -1);
+        }
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>mysitebook_chrome.html</h1>
+    <p>Report generated on 23-Oct-2024 at 08:04:20 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v2.0.1</p>
+    <h2>Summary</h2>
+    <p>2 tests ran in 88.56 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">2 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">0 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testCases/test_msb.py::TestMsb::test_home_page</td>
+          <td class="col-duration">4.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>[32mINFO    [0m TestMsb:test_msb.py:26 Setting up the browser 
+[32mINFO    [0m TestMsb:test_msb.py:28 Opening the URL -----&gt; https://app.mysitebook.io/app/auth/signin
+[32mINFO    [0m TestMsb:test_msb.py:29 Creating object for login 
+[32mINFO    [0m TestMsb:test_msb.py:31 Entering the PHONE NUMBER -----&gt; 9325884043
+[32mINFO    [0m TestMsb:test_msb.py:33 Clicking on CONTINUE BUTTON 
+[32mINFO    [0m TestMsb:test_msb.py:35 Entering the PASSWORD -----&gt; TechPrimeLabs@1
+[32mINFO    [0m TestMsb:test_msb.py:37 Clicking on LOGIN BUTTON<br/> -------------------------------Captured log call-------------------------------- <br/>[32mINFO    [0m TestMsb:test_msb.py:41 Testing the PAGE TITLE -----&gt; Projects | Active = Projects | Active<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testCases/test_msb.py::TestMsb::test_bill_page</td>
+          <td class="col-duration">61.36</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>[32mINFO    [0m TestMsb:test_msb.py:26 Setting up the browser 
+[32mINFO    [0m TestMsb:test_msb.py:28 Opening the URL -----&gt; https://app.mysitebook.io/app/auth/signin
+[32mINFO    [0m TestMsb:test_msb.py:29 Creating object for login 
+[32mINFO    [0m TestMsb:test_msb.py:31 Entering the PHONE NUMBER -----&gt; 9325884043
+[32mINFO    [0m TestMsb:test_msb.py:33 Clicking on CONTINUE BUTTON 
+[32mINFO    [0m TestMsb:test_msb.py:35 Entering the PASSWORD -----&gt; TechPrimeLabs@1
+[32mINFO    [0m TestMsb:test_msb.py:37 Clicking on LOGIN BUTTON<br/> -------------------------------Captured log call-------------------------------- <br/>[32mINFO    [0m TestMsb:test_msb.py:45 Setting up the browser 
+[32mINFO    [0m TestMsb:test_msb.py:47 Selecting the PROJECT -----&gt; Sample bungalow project
+[32mINFO    [0m TestMsb:test_msb.py:49 Selecting the CHECKOUT -----&gt; Detailed Estimate
+[32mINFO    [0m TestMsb:test_msb.py:51 Company Details -----&gt; ADVAITH DESIGN STUDIO ARCHITECTS , Contact No.: 919886216932, Address: BANGALORE
+[32mINFO    [0m TestMsb:test_msb.py:53 Getting Details for Calculations 
+[32mINFO    [0m TestMsb:test_msb.py:56 Getting Length of all items -----&gt; 75
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 738000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 738000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;738000.0 vs 738000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 738000.0 is Equal 738000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 36512.04
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 36512.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;36512.04 vs 36512.0
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 36512.04 is NOT Equal 36512.0-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 36512.0
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 24658.88
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 24658.764
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;24658.88 vs 24658.764
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 24658.88 is NOT Equal 24658.764-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 24658.764
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 10298.55
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 10298.5
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;10298.55 vs 10298.5
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 10298.55 is NOT Equal 10298.5-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 10298.5
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 33959.05
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 33973.23560000001
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;33959.05 vs 33973.23560000001
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 33959.05 is NOT Equal 33973.23560000001-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 33973.23560000001
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 133463.94
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 133447.5252
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;133463.94 vs 133447.5252
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 133463.94 is NOT Equal 133447.5252-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 133447.5252
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 227047.72
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 227047.4105
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;227047.72 vs 227047.4105
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 227047.72 is NOT Equal 227047.4105-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 227047.4105
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 198077.93
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 198077.59999999998
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;198077.93 vs 198077.59999999998
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 198077.93 is NOT Equal 198077.59999999998-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 198077.59999999998
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 23253.18
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 23253.2696
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;23253.18 vs 23253.2696
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 23253.18 is NOT Equal 23253.2696-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 23253.2696
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 273992.49
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 273989.0478
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;273992.49 vs 273989.0478
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 273992.49 is NOT Equal 273989.0478-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 273989.0478
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 5134.23
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 5134.3814
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;5134.23 vs 5134.3814
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 5134.23 is NOT Equal 5134.3814-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 5134.3814
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 18163.86
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 18164.114999999998
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;18163.86 vs 18164.114999999998
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 18163.86 is NOT Equal 18164.114999999998-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 18164.114999999998
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 4370.24
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 4370.0846
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;4370.24 vs 4370.0846
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 4370.24 is NOT Equal 4370.0846-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 4370.0846
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 13532.87
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 13532.740499999998
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;13532.87 vs 13532.740499999998
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 13532.87 is NOT Equal 13532.740499999998-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 13532.740499999998
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 92444.1
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 92444.0374
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;92444.1 vs 92444.0374
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 92444.1 is NOT Equal 92444.0374-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 92444.0374
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 65909.12
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 65909.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;65909.12 vs 65909.0
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 65909.12 is NOT Equal 65909.0-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 65909.0
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 15481.06
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 15481.05
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;15481.06 vs 15481.05
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 15481.06 is NOT Equal 15481.05-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 15481.05
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 229610.78
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 229631.1094
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;229610.78 vs 229631.1094
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 229610.78 is NOT Equal 229631.1094-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 229631.1094
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 12667.75
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 12668.221
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;12667.75 vs 12668.221
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 12667.75 is NOT Equal 12668.221-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 12668.221
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 40251.7
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 40251.288
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;40251.7 vs 40251.288
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 40251.7 is NOT Equal 40251.288-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 40251.288
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 28583.16
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 28583.102000000003
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;28583.16 vs 28583.102000000003
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 28583.16 is NOT Equal 28583.102000000003-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 28583.102000000003
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 30739.03
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 30740.475000000002
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;30739.03 vs 30740.475000000002
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 30739.03 is NOT Equal 30740.475000000002-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 30740.475000000002
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 31915.27
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 31916.64
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;31915.27 vs 31916.64
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 31915.27 is NOT Equal 31916.64-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 31916.64
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 41087.25
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 41088.78
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;41087.25 vs 41088.78
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 41087.25 is NOT Equal 41088.78-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 41088.78
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 8268.92
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 8268.5772
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;8268.92 vs 8268.5772
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 8268.92 is NOT Equal 8268.5772-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 8268.5772
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 1542.36
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 1542.555
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;1542.36 vs 1542.555
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 1542.36 is NOT Equal 1542.555-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 1542.555
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 28423.35
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 28424.2772
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;28423.35 vs 28424.2772
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 28423.35 is NOT Equal 28424.2772-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 28424.2772
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 12383.43
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 12383.894199999999
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;12383.43 vs 12383.894199999999
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 12383.43 is NOT Equal 12383.894199999999-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 12383.894199999999
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 2532.56
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 2532.7971000000002
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;2532.56 vs 2532.7971000000002
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 2532.56 is NOT Equal 2532.7971000000002-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 2532.7971000000002
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 4663.32
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 4662.8603
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;4663.32 vs 4662.8603
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 4663.32 is NOT Equal 4662.8603-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 4662.8603
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 4360.83
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 4360.4064
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;4360.83 vs 4360.4064
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 4360.83 is NOT Equal 4360.4064-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 4360.4064
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 3883.92
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 3883.663
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;3883.92 vs 3883.663
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 3883.92 is NOT Equal 3883.663-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 3883.663
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 18466.91
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 18467.6982
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;18466.91 vs 18467.6982
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 18466.91 is NOT Equal 18467.6982-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 18467.6982
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 19890.22
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 19890.22
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;19890.22 vs 19890.22
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 19890.22 is Equal 19890.22-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 13248.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 13248.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;13248.0 vs 13248.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 13248.0 is Equal 13248.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 26430.48
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 26430.48
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;26430.48 vs 26430.48
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 26430.48 is Equal 26430.48-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 14517.1
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 14517.1
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;14517.1 vs 14517.1
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 14517.1 is Equal 14517.1-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 58205.9
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 58205.9
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;58205.9 vs 58205.9
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 58205.9 is Equal 58205.9-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 28422.15
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 28422.149999999998
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;28422.15 vs 28422.149999999998
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 28422.15 is NOT Equal 28422.149999999998-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 28422.149999999998
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 4539.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 4539.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;4539.0 vs 4539.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 4539.0 is Equal 4539.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 20041.4
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 20041.4
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;20041.4 vs 20041.4
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 20041.4 is Equal 20041.4-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 12333.6
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 12333.599999999999
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;12333.6 vs 12333.599999999999
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 12333.6 is NOT Equal 12333.599999999999-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 12333.599999999999
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 42705.6
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 42705.600000000006
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;42705.6 vs 42705.600000000006
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 42705.6 is NOT Equal 42705.600000000006-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 42705.600000000006
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 7769.66
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 7770.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;7769.66 vs 7770.0
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 7769.66 is NOT Equal 7770.0-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 7770.0
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 2902.8
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 2902.5
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;2902.8 vs 2902.5
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 2902.8 is NOT Equal 2902.5-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 2902.5
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 34690.91
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 34686.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;34690.91 vs 34686.0
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 34690.91 is NOT Equal 34686.0-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 34686.0
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 18870.56
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 18870.350000000002
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;18870.56 vs 18870.350000000002
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 18870.56 is NOT Equal 18870.350000000002-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 18870.350000000002
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 6196.3
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 6196.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;6196.3 vs 6196.0
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 6196.3 is NOT Equal 6196.0-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 6196.0
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 61074.07
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 61055.072400000005
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;61074.07 vs 61055.072400000005
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 61074.07 is NOT Equal 61055.072400000005-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 61055.072400000005
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 47356.1
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 47371.8546
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;47356.1 vs 47371.8546
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 47356.1 is NOT Equal 47371.8546-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 47371.8546
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 74860.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 74860.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;74860.0 vs 74860.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 74860.0 is Equal 74860.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 8000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 8000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;8000.0 vs 8000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 8000.0 is Equal 8000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 16000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 16000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;16000.0 vs 16000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 16000.0 is Equal 16000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 12000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 12000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;12000.0 vs 12000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 12000.0 is Equal 12000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 60360.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 60360.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;60360.0 vs 60360.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 60360.0 is Equal 60360.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 5810.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 5810.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;5810.0 vs 5810.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 5810.0 is Equal 5810.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 25000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 25000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;25000.0 vs 25000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 25000.0 is Equal 25000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 31865.7
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 31864.000000000004
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;31865.7 vs 31864.000000000004
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 31865.7 is NOT Equal 31864.000000000004-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 31864.000000000004
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 150000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 150000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;150000.0 vs 150000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 150000.0 is Equal 150000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 35000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 35000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;35000.0 vs 35000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 35000.0 is Equal 35000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;20000.0 vs 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 20000.0 is Equal 20000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;20000.0 vs 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 20000.0 is Equal 20000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 9319.2
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 9319.5
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;9319.2 vs 9319.5
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 9319.2 is NOT Equal 9319.5-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 9319.5
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 4445.94
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 4446.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;4445.94 vs 4446.0
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 4445.94 is NOT Equal 4446.0-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 4446.0
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 83607.19
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 83607.1929
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;83607.19 vs 83607.1929
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 83607.19 is NOT Equal 83607.1929-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 83607.1929
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 20358.51
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 20355.2634
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;20358.51 vs 20355.2634
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 20358.51 is NOT Equal 20355.2634-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 20355.2634
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 37334.21
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 37334.61
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;37334.21 vs 37334.61
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 37334.21 is NOT Equal 37334.61-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 37334.61
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 78298.36
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 78294.0986
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;78298.36 vs 78294.0986
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 78298.36 is NOT Equal 78294.0986-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 78294.0986
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 44904.53
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 44904.44
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;44904.53 vs 44904.44
+[32mINFO    [0m TestMsb:test_msb.py:67 Test Result -----&gt; 44904.53 is NOT Equal 44904.44-----&gt; TEST FAILED
+[32mINFO    [0m TestMsb:test_msb.py:69 Total should be -----&gt; 44904.44
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 75000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 75000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;75000.0 vs 75000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 75000.0 is Equal 75000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 2500.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 2500.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;2500.0 vs 2500.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 2500.0 is Equal 2500.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;20000.0 vs 20000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 20000.0 is Equal 20000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 2000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 2000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;2000.0 vs 2000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 2000.0 is Equal 2000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 5000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 5000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;5000.0 vs 5000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 5000.0 is Equal 5000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************
+[32mINFO    [0m TestMsb:test_msb.py:59 Actual Result: 35000.0
+[32mINFO    [0m TestMsb:test_msb.py:61 Expected Result: 35000.0
+[32mINFO    [0m TestMsb:test_msb.py:62 Comparing the Test -----&gt;35000.0 vs 35000.0
+[32mINFO    [0m TestMsb:test_msb.py:64 Test Result -----&gt; 35000.0 is Equal 35000.0-----&gt; TEST PASSED
+[32mINFO    [0m TestMsb:test_msb.py:72 *************************************************************************************************<br/></div></td></tr></tbody></table></body></html>

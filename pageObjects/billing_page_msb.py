@@ -97,6 +97,8 @@ class BillingPage:
         all_content = self.driver.find_elements(By.XPATH, "//tr[@class='empty-row text-danger']/following-sibling::tr")
         # Looping all the contents to get the content on Billing Page
         for all_c in range(1, len(all_content) + 1):
+            item_sr_no_s = self.wait_explicitly_for_visibility_of_element((By.XPATH, "//tr/following-sibling::tr[" + str(all_c) + "]/td[@id='sr-no']"))
+            self.driver.execute_script("arguments[0].scrollIntoView();", item_sr_no_s)
             # Getting content for Screenshot on Billing Page
             content_c = self.driver.find_element(By.XPATH, "//tr/following-sibling::tr[" + str(all_c) + "]")
             # Getting all the Item Serial Numbers on Billing Page
